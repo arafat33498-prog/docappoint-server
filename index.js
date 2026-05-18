@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { MongoClient, ObjectId } from "mongodb"; 
+import { betterAuth } from "better-auth";
+import { mongodbAdapter } from "better-auth/adapters/mongodb";
+import { toNodeHandler } from "better-auth/node"; 
 
 dotenv.config();
 
@@ -14,7 +17,6 @@ app.use(cors({
 
 app.use(express.json());
 
-
 const client = new MongoClient(process.env.MONGODB_URI);
 
 async function run() {
@@ -25,12 +27,30 @@ async function run() {
     const db = client.db("docappoint");
     const doctorsCollection = db.collection("doctors");
 
+   
+    const auth = betterAuth({
+        database: mongodbAdapter(db), 
+        emailAndPassword: {  
+            enabled: true, 
+        },
+       trustedOrigins: [process.env.CLIENT_URL], 
+    advanced: {
+        trustHost: true
+    }
+    });
+
+    
+    app.all(/^\/api\/auth\/.*/, (req, res) => {
+      toNodeHandler(auth)(req, res);
+    });
+    // ==========================================
+
     
     app.get("/", (req, res) => {
       res.send("DocAppoint Server Running");
     });
 
-    
+  
     app.get("/doctors", async (req, res) => {
       try {
         const result = await doctorsCollection.find().toArray();

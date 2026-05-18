@@ -80,9 +80,15 @@ async function run() {
       }
     });
 
+    // 🔒 আপডেট করা ইউজার-স্পেসিফিক GET API
     app.get("/bookings", async (req, res) => {
       try {
-        const result = await bookingsCollection.find().toArray();
+        const email = req.query.email;
+        let query = {};
+        if (email) {
+          query = { userEmail: email };
+        }
+        const result = await bookingsCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
         console.error("Error fetching bookings:", error);
@@ -90,7 +96,6 @@ async function run() {
       }
     });
 
-    
     app.patch("/bookings/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -106,6 +111,45 @@ async function run() {
       } catch (error) {
         console.error("Error updating booking status:", error);
         res.status(500).send({ message: "Failed to update booking status" });
+      }
+    });
+
+    // 📝 [নতুন রাউট] রোগীর নিজস্ব বুকিং ইনফো আপডেট করার PUT API
+    app.put("/bookings/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedData = req.body; 
+        const query = { _id: new ObjectId(id) };
+
+        // রিকোয়ারমেন্ট অনুযায়ী ইমেইল ও ডাক্তার-সংক্রান্ত ফিল্ড বাদে বাকি ফিল্ডগুলো আপডেট হবে
+        const updateDoc = {
+          $set: {
+            patientName: updatedData.patientName,
+            gender: updatedData.gender,
+            phone: updatedData.phone,
+            appointmentDate: updatedData.appointmentDate,
+            appointmentTime: updatedData.appointmentTime, 
+          },
+        };
+
+        const result = await bookingsCollection.updateOne(query, updateDoc);
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating booking:", error);
+        res.status(500).send({ message: "Failed to update appointment" });
+      }
+    });
+
+    // 🗑️ [নতুন রাউট] অ্যাপয়েন্টমেন্ট ডিলিট করার DELETE API
+    app.delete("/bookings/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await bookingsCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        console.error("Error deleting booking:", error);
+        res.status(500).send({ message: "Failed to delete appointment" });
       }
     });
 

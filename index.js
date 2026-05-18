@@ -80,7 +80,6 @@ async function run() {
       }
     });
 
-    
     app.get("/bookings", async (req, res) => {
       try {
         const result = await bookingsCollection.find().toArray();
@@ -88,6 +87,25 @@ async function run() {
       } catch (error) {
         console.error("Error fetching bookings:", error);
         res.status(500).send({ message: "Failed to fetch bookings data" });
+      }
+    });
+
+    
+    app.patch("/bookings/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status } = req.body;
+        const query = { _id: new ObjectId(id) };
+        
+        const updateDoc = {
+          $set: { status: status },
+        };
+
+        const result = await bookingsCollection.updateOne(query, updateDoc);
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating booking status:", error);
+        res.status(500).send({ message: "Failed to update booking status" });
       }
     });
 

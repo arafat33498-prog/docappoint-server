@@ -26,7 +26,6 @@ async function run() {
 
     const db = client.db("docappoint");
     const doctorsCollection = db.collection("doctors");
-    // 🚀 ১. বুকিং কালেকশনটি ডিফাইন করলাম
     const bookingsCollection = db.collection("bookings");
 
     const auth = betterAuth({
@@ -70,15 +69,25 @@ async function run() {
       }
     });
 
-    // 🚀 ২. নতুন অ্যাপয়েন্টমেন্ট বুক করার POST API
     app.post("/bookings", async (req, res) => {
       try {
-        const bookingData = req.body; // ফ্রন্টএন্ডের ফর্ম থেকে আসা সব ডেটা
+        const bookingData = req.body; 
         const result = await bookingsCollection.insertOne(bookingData);
         res.status(201).send({ success: true, insertedId: result.insertedId });
       } catch (error) {
         console.error("Error creating booking:", error);
         res.status(500).send({ message: "Failed to complete the booking" });
+      }
+    });
+
+    
+    app.get("/bookings", async (req, res) => {
+      try {
+        const result = await bookingsCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+        res.status(500).send({ message: "Failed to fetch bookings data" });
       }
     });
 

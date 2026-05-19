@@ -13,11 +13,12 @@ const port = process.env.PORT || 5000;
 
 app.set("trust proxy", 1);
 
+// CORS কনফিগারেশন - সব হেডার অ্যালাউ করা হয়েছে
 app.use(cors({
     origin: process.env.CLIENT_URL,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-better-auth-call", "x-better-auth-version"],
 }));
 
 app.use(express.json());
@@ -27,8 +28,6 @@ const client = new MongoClient(process.env.MONGODB_URI);
 async function run() {
     try {
         await client.connect();
-        console.log("MongoDB Connected Successfully 🚀");
-
         const db = client.db("docappoint");
         const doctorsCollection = db.collection("doctors");
         const bookingsCollection = db.collection("bookings");
@@ -46,12 +45,12 @@ async function run() {
             },
         });
 
-        // Better Auth API Route
+        // Auth routes
         app.all("/api/auth/*", (req, res) => {
             toNodeHandler(auth)(req, res);
         });
 
-        // Doctors Routes
+        // API routes
         app.get("/doctors", async (req, res) => {
             const result = await doctorsCollection.find().toArray();
             res.send(result);
@@ -62,7 +61,6 @@ async function run() {
             res.send(result);
         });
 
-        // Bookings Routes
         app.post("/bookings", async (req, res) => {
             const result = await bookingsCollection.insertOne(req.body);
             res.status(201).send({ success: true, insertedId: result.insertedId });
@@ -75,29 +73,9 @@ async function run() {
             res.send(result);
         });
 
-        app.put("/bookings/:id", async (req, res) => {
-            const data = req.body;
-            const result = await bookingsCollection.updateOne(
-                { _id: new ObjectId(req.params.id) },
-                { $set: { 
-                    patientName: data.patientName, 
-                    phone: data.phone, 
-                    appointmentDate: data.appointmentDate, 
-                    timeSlot: data.timeSlot || data.appointmentTime 
-                } }
-            );
-            res.send(result);
-        });
-
-        app.delete("/bookings/:id", async (req, res) => {
-            const result = await bookingsCollection.deleteOne({ _id: new ObjectId(req.params.id) });
-            res.send(result);
-        });
-
         app.listen(port, () => console.log(`Server running on port ${port}`));
     } catch (error) {
-        console.error("DB Connection Error:", error);
+        console.error("Connection Error:", error);
     }
 }
-
 run();

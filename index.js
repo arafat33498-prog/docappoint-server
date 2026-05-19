@@ -9,10 +9,14 @@ import { toNodeHandler } from "better-auth/node";
 dotenv.config();
 
 const app = express();
+const port = process.env.PORT || 5000;
+
 
 app.use(cors({
-  origin: process.env.CLIENT_URL,
+  origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json());
@@ -22,21 +26,21 @@ const client = new MongoClient(process.env.MONGODB_URI);
 async function run() {
   try {
     await client.connect();
-    console.log("MongoDB Connected!");
+    console.log("MongoDB Connected Successfully! 🚀");
 
     const db = client.db("docappoint");
     const doctorsCollection = db.collection("doctors");
     const bookingsCollection = db.collection("bookings");
 
     const auth = betterAuth({
-        database: mongodbAdapter(db), 
-        emailAndPassword: {  
-            enabled: true, 
-        },
-        trustedOrigins: [process.env.CLIENT_URL], 
-    advanced: {
+      database: mongodbAdapter(db), 
+      emailAndPassword: {  
+        enabled: true, 
+      },
+      trustedOrigins: ["http://localhost:3000"], 
+      advanced: {
         trustHost: true
-    }
+      }
     });
 
     app.all(/^\/api\/auth\/.*/, (req, res) => {
@@ -80,14 +84,21 @@ async function run() {
       }
     });
 
-    // 🔒 আপডেট করা ইউজার-স্পেসিফিক GET API
+    
     app.get("/bookings", async (req, res) => {
       try {
         const email = req.query.email;
         let query = {};
+        
         if (email) {
-          query = { userEmail: email };
+          query = {
+            $or: [
+              { userEmail: email },
+              { email: email }
+            ]
+          };
         }
+        
         const result = await bookingsCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
@@ -114,21 +125,21 @@ async function run() {
       }
     });
 
-    // 📝 [নতুন রাউট] রোগীর নিজস্ব বুকিং ইনফো আপডেট করার PUT API
     app.put("/bookings/:id", async (req, res) => {
       try {
         const id = req.params.id;
         const updatedData = req.body; 
         const query = { _id: new ObjectId(id) };
 
-        // রিকোয়ারমেন্ট অনুযায়ী ইমেইল ও ডাক্তার-সংক্রান্ত ফিল্ড বাদে বাকি ফিল্ডগুলো আপডেট হবে
+      
         const updateDoc = {
           $set: {
             patientName: updatedData.patientName,
-            gender: updatedData.gender,
+            gender: updatedData.gender || "Male", 
             phone: updatedData.phone,
             appointmentDate: updatedData.appointmentDate,
-            appointmentTime: updatedData.appointmentTime, 
+            appointmentTime: updatedData.appointmentTime || updatedData.timeSlot, 
+            timeSlot: updatedData.timeSlot || updatedData.appointmentTime, 
           },
         };
 
@@ -140,7 +151,7 @@ async function run() {
       }
     });
 
-    // 🗑️ [নতুন রাউট] অ্যাপয়েন্টমেন্ট ডিলিট করার DELETE API
+  
     app.delete("/bookings/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -153,13 +164,14 @@ async function run() {
       }
     });
 
-    app.listen(5000, () => {
-      console.log("Server running on port 5000");
-    });
-
   } catch (error) {
-    console.log(error);
+    console.error("Database Connection Error Error:", error);
   }
 }
 
 run();
+
+
+app.listen(port, () => {
+  console.log(`Server running smoothly on port ${port}`);
+});

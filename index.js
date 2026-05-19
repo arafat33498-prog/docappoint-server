@@ -17,9 +17,11 @@ app.set("trust proxy", 1);
 // ======================
 // CORS CONFIG (FIXED)
 // ======================
+const allowedOrigin = process.env.CLIENT_URL || "https://docappoint-client-server.vercel.app";
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "https://docappoint-client-server.vercel.app", 
+    origin: allowedOrigin, 
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -52,7 +54,7 @@ async function run() {
         enabled: true,
       },
 
-      trustedOrigins: [process.env.CLIENT_URL || "https://docappoint-client-server.vercel.app"],
+      trustedOrigins: [allowedOrigin],
 
       advanced: {
         trustHost: true,
@@ -63,8 +65,8 @@ async function run() {
       },
     });
 
-    // auth routes
-    app.all(/^\/api\/auth\/.*/, (req, res) => {
+    // 🎯 ফিক্স: এক্সপ্রেসের ওয়াইল্ডকার্ড স্ট্রিং রুট, যা সব auth রিকোয়েস্ট সঠিকভাবে ক্যাচ করবে
+    app.all("/api/auth/*", (req, res) => {
       toNodeHandler(auth)(req, res);
     });
 

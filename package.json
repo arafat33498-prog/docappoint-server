@@ -3,13 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+
   "scripts": {
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "start": "node index.js"
   },
+
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+
   "dependencies": {
     "better-auth": "^1.6.11",
     "cors": "^2.8.6",
@@ -17,6 +21,7 @@
     "express": "^5.2.1",
     "mongodb": "^7.2.0"
   },
+
   "devDependencies": {
     "nodemon": "^3.1.14"
   }

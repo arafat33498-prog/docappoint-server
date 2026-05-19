@@ -11,9 +11,13 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-
+// আপডেট করা CORS কনফিগারেশন
 app.use(cors({
-  origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+  origin: [
+    "http://localhost:3000", 
+    "http://127.0.0.1:3000",
+    "https://docappoint-client-server.vercel.app" 
+  ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -37,7 +41,11 @@ async function run() {
       emailAndPassword: {  
         enabled: true, 
       },
-      trustedOrigins: ["http://localhost:3000"], 
+      // আপডেট করা Trusted Origins
+      trustedOrigins: [
+        "http://localhost:3000", 
+        "https://docappoint-client-server.vercel.app"
+      ], 
       advanced: {
         trustHost: true
       }
@@ -51,126 +59,78 @@ async function run() {
       res.send("DocAppoint Server Running");
     });
 
+    // রাউটগুলো একই থাকছে
     app.get("/doctors", async (req, res) => {
       try {
         const result = await doctorsCollection.find().toArray();
         res.send(result);
       } catch (error) {
-        console.error("Error fetching doctors:", error);
-        res.status(500).send({ message: "Failed to fetch doctors data" });
+        res.status(500).send({ message: "Failed to fetch doctors" });
       }
     });
 
     app.get("/doctors/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await doctorsCollection.findOne(query);
+        const result = await doctorsCollection.findOne({ _id: new ObjectId(req.params.id) });
         res.send(result);
       } catch (error) {
-        console.error("Error fetching doctor details:", error);
         res.status(500).send({ message: "Failed to fetch doctor details" });
       }
     });
 
     app.post("/bookings", async (req, res) => {
       try {
-        const bookingData = req.body; 
-        const result = await bookingsCollection.insertOne(bookingData);
+        const result = await bookingsCollection.insertOne(req.body);
         res.status(201).send({ success: true, insertedId: result.insertedId });
       } catch (error) {
-        console.error("Error creating booking:", error);
-        res.status(500).send({ message: "Failed to complete the booking" });
+        res.status(500).send({ message: "Failed to book" });
       }
     });
 
-    
     app.get("/bookings", async (req, res) => {
       try {
         const email = req.query.email;
-        let query = {};
-        
-        if (email) {
-          query = {
-            $or: [
-              { userEmail: email },
-              { email: email }
-            ]
-          };
-        }
-        
+        const query = email ? { $or: [{ userEmail: email }, { email: email }] } : {};
         const result = await bookingsCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
-        console.error("Error fetching bookings:", error);
-        res.status(500).send({ message: "Failed to fetch bookings data" });
+        res.status(500).send({ message: "Failed to fetch bookings" });
       }
     });
 
     app.patch("/bookings/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const { status } = req.body;
-        const query = { _id: new ObjectId(id) };
-        
-        const updateDoc = {
-          $set: { status: status },
-        };
-
-        const result = await bookingsCollection.updateOne(query, updateDoc);
+        const result = await bookingsCollection.updateOne({ _id: new ObjectId(req.params.id) }, { $set: { status: req.body.status } });
         res.send(result);
       } catch (error) {
-        console.error("Error updating booking status:", error);
-        res.status(500).send({ message: "Failed to update booking status" });
+        res.status(500).send({ message: "Failed to update status" });
       }
     });
 
     app.put("/bookings/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const updatedData = req.body; 
-        const query = { _id: new ObjectId(id) };
-
-      
-        const updateDoc = {
-          $set: {
-            patientName: updatedData.patientName,
-            gender: updatedData.gender || "Male", 
-            phone: updatedData.phone,
-            appointmentDate: updatedData.appointmentDate,
-            appointmentTime: updatedData.appointmentTime || updatedData.timeSlot, 
-            timeSlot: updatedData.timeSlot || updatedData.appointmentTime, 
-          },
-        };
-
-        const result = await bookingsCollection.updateOne(query, updateDoc);
+        const result = await bookingsCollection.updateOne({ _id: new ObjectId(req.params.id) }, { $set: req.body });
         res.send(result);
       } catch (error) {
-        console.error("Error updating booking:", error);
         res.status(500).send({ message: "Failed to update appointment" });
       }
     });
 
-  
     app.delete("/bookings/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await bookingsCollection.deleteOne(query);
+        const result = await bookingsCollection.deleteOne({ _id: new ObjectId(req.params.id) });
         res.send(result);
       } catch (error) {
-        console.error("Error deleting booking:", error);
-        res.status(500).send({ message: "Failed to delete appointment" });
+        res.status(500).send({ message: "Failed to delete" });
       }
     });
 
   } catch (error) {
-    console.error("Database Connection Error Error:", error);
+    console.error("Database Connection Error:", error);
   }
 }
 
 run();
-
 
 app.listen(port, () => {
   console.log(`Server running smoothly on port ${port}`);

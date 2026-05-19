@@ -9,11 +9,10 @@ import { toNodeHandler } from "better-auth/node";
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5000; // রেন্ডার এই পোর্টটিই ব্যবহার করবে
 
 app.set("trust proxy", 1);
 
-// CORS কনফিগারেশন - সব হেডার অ্যালাউ করা হয়েছে
 app.use(cors({
     origin: process.env.CLIENT_URL,
     credentials: true,
@@ -28,6 +27,8 @@ const client = new MongoClient(process.env.MONGODB_URI);
 async function run() {
     try {
         await client.connect();
+        console.log("MongoDB Connected Successfully 🚀");
+
         const db = client.db("docappoint");
         const doctorsCollection = db.collection("doctors");
         const bookingsCollection = db.collection("bookings");
@@ -45,8 +46,8 @@ async function run() {
             },
         });
 
-        // Auth routes
-        app.all("/api/auth/*", (req, res) => {
+        // সমাধান ১: পাথ এরর ঠিক করা হয়েছে (wildcard * ছাড়া)
+        app.use("/api/auth", (req, res) => {
             toNodeHandler(auth)(req, res);
         });
 
@@ -73,9 +74,14 @@ async function run() {
             res.send(result);
         });
 
-        app.listen(port, () => console.log(`Server running on port ${port}`));
+        // সমাধান ২: পোর্ট লিসেনিং রেন্ডারের জন্য নিশ্চিত করা
+        app.listen(port, "0.0.0.0", () => {
+            console.log(`Server running on port ${port}`);
+        });
+
     } catch (error) {
         console.error("Connection Error:", error);
     }
 }
+
 run();

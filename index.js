@@ -35,116 +35,78 @@ async function run() {
     const doctorsCollection = db.collection("doctors");
     const bookingsCollection = db.collection("bookings");
 
+    // Better Auth কনফিগারেশন - কুকি সেটিংস অটোমেটিক রাখা হয়েছে
     const auth = betterAuth({
+      baseURL: process.env.BETTER_AUTH_URL,
       database: mongodbAdapter(db),
-      emailAndPassword: {
-        enabled: true,
-      },
+      emailAndPassword: { enabled: true },
       trustedOrigins: [process.env.CLIENT_URL],
       advanced: {
         trustHost: true,
-        cookieOptions: {
-          secure: true,
-          sameSite: "none",
-        }
       },
     });
 
-    app.all(/^\/api\/auth\/.*/, (req, res) => {
+    // Auth রুট হ্যান্ডলার (এরর ফিক্সড)
+    app.all("/api/auth/:action*", (req, res) => {
       toNodeHandler(auth)(req, res);
     });
 
-    app.get("/", (req, res) => {
-      res.send("DocAppoint Server Running 🚀");
-    });
+    // অন্যান্য রুটসমূহ
+    app.get("/", (req, res) => res.send("DocAppoint Server Running 🚀"));
 
     app.get("/doctors", async (req, res) => {
-      try {
-        const result = await doctorsCollection.find().toArray();
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to fetch doctors" });
-      }
+      const result = await doctorsCollection.find().toArray();
+      res.send(result);
     });
 
     app.get("/doctors/:id", async (req, res) => {
-      try {
-        const result = await doctorsCollection.findOne({
-          _id: new ObjectId(req.params.id),
-        });
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to fetch doctor details" });
-      }
+      const result = await doctorsCollection.findOne({ _id: new ObjectId(req.params.id) });
+      res.send(result);
     });
 
     app.post("/bookings", async (req, res) => {
-      try {
-        const result = await bookingsCollection.insertOne(req.body);
-        res.status(201).send({
-          success: true,
-          insertedId: result.insertedId,
-        });
-      } catch (error) {
-        res.status(500).send({ message: "Failed to create booking" });
-      }
+      const result = await bookingsCollection.insertOne(req.body);
+      res.status(201).send({ success: true, insertedId: result.insertedId });
     });
 
     app.get("/bookings", async (req, res) => {
-      try {
-        const email = req.query.email;
-        const query = email ? { $or: [{ userEmail: email }, { email: email }] } : {};
-        const result = await bookingsCollection.find(query).toArray();
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to fetch bookings" });
-      }
+      const email = req.query.email;
+      const query = email ? { $or: [{ userEmail: email }, { email: email }] } : {};
+      const result = await bookingsCollection.find(query).toArray();
+      res.send(result);
     });
 
     app.patch("/bookings/:id", async (req, res) => {
-      try {
-        const result = await bookingsCollection.updateOne(
-          { _id: new ObjectId(req.params.id) },
-          { $set: { status: req.body.status } }
-        );
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to update status" });
-      }
+      const result = await bookingsCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { status: req.body.status } }
+      );
+      res.send(result);
     });
 
     app.put("/bookings/:id", async (req, res) => {
-      try {
-        const data = req.body;
-        const result = await bookingsCollection.updateOne(
-          { _id: new ObjectId(req.params.id) },
-          {
-            $set: {
-              patientName: data.patientName,
-              gender: data.gender || "Male",
-              phone: data.phone,
-              appointmentDate: data.appointmentDate,
-              appointmentTime: data.appointmentTime || data.timeSlot,
-              timeSlot: data.timeSlot || data.appointmentTime,
-            },
-          }
-        );
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to update booking" });
-      }
+      const data = req.body;
+      const result = await bookingsCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        {
+          $set: {
+            patientName: data.patientName,
+            gender: data.gender || "Male",
+            phone: data.phone,
+            appointmentDate: data.appointmentDate,
+            appointmentTime: data.appointmentTime || data.timeSlot,
+            timeSlot: data.timeSlot || data.appointmentTime,
+          },
+        }
+      );
+      res.send(result);
     });
 
     app.delete("/bookings/:id", async (req, res) => {
-      try {
-        const result = await bookingsCollection.deleteOne({
-          _id: new ObjectId(req.params.id),
-        });
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Failed to delete booking" });
-      }
+      const result = await bookingsCollection.deleteOne({ _id: new ObjectId(req.params.id) });
+      res.send(result);
     });
+
   } catch (error) {
     console.error("DB Connection Error:", error);
   }
@@ -154,4 +116,4 @@ run();
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-})
+});

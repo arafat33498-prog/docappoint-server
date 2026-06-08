@@ -2,9 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { MongoClient, ObjectId } from "mongodb";
-import cookieParser from "cookie-parser";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
+import { betterAuth } from "better-auth";
+import { mongodbAdapter } from "better-auth/adapters/mongodb";
+import { toNodeHandler } from "better-auth/node";
 
 dotenv.config();
 
@@ -12,7 +12,9 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 app.set("trust proxy", 1);
+app.use(express.json());
 
+// CORS Configuration
 app.use(
   cors({
     origin: process.env.CLIENT_URL,
@@ -22,27 +24,7 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(cookieParser());
-
 const client = new MongoClient(process.env.MONGODB_URI);
-
-// JWT ভেরিফিকেশন মিডলওয়্যার
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).send({ message: "Unauthorized access" });
-  }
-  const token = authHeader.split(" ")[1];
-  
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).send({ message: "Forbidden access" });
-    }
-    req.decoded = decoded;
-    next();
-  });
-};
 
 async function run() {
   try {
@@ -50,101 +32,75 @@ async function run() {
     console.log("MongoDB Connected Successfully 🚀");
 
     const db = client.db("docappoint");
-    const doctorsCollection = db.collection("doctors");
-    const bookingsCollection = db.collection("bookings");
-    const usersCollection = db.collection("users");
 
-    app.get("/", (req, res) => res.send("DocAppoint Server Running 🚀"));
+    // Better Auth Setup
+    const auth = betterAuth({
+      database: mongodbAdapter(db),
+      secret: process.env.BETTER_AUTH_SECRET,
+      baseURL: process.env.BETTER_AUTH_URL,
+      emailAndPassword: { enabled: true },
+    });
 
-    // REGISTER
-    app.post("/register", async (req, res) => {
-      try {
-        const { name, email, password, image } = req.body;
-        const existingUser = await usersCollection.findOne({ email });
-        if (existingUser) return res.status(400).send({ success: false, message: "User already exists" });
+    // Better Auth Routes - Fix for path-to-regexp error
+    app.all("/api/auth/:action", (req, res) => {
+      return toNodeHandler(auth)(req, res);
+    });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await usersCollection.insertOne({ name, email, password: hashedPassword, image });
-        res.send({ success: true, message: "Registration successful" });
-      } catch (error) {
-        res.status(500).send({ success: false, message: "Registration failed" });
+    // Auth Middleware
+    const authMiddleware = async (req, res, next) => {
+      const session = await auth.api.getSession({ headers: req.headers });
+      if (!session) {
+        return res.status(401).send({ message: "Unauthorized access" });
       }
-    });
+      req.user = session.user;
+      next();
+    };
 
-    // LOGIN
-    app.post("/login", async (req, res) => {
-      try {
-        const { email, password } = req.body;
-        const user = await usersCollection.findOne({ email });
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-          return res.status(400).send({ success: false, message: "Invalid email or password" });
-        }
-        const token = jwt.sign({ email: user.email }, process.env.JWT_SECRET, { expiresIn: "7d" });
-        res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
-        res.send({ success: true, token, user: { name: user.name, email: user.email, image: user.image } });
-      } catch (error) {
-        res.status(500).send({ success: false, message: "Login failed" });
-      }
-    });
+    // Public Routes
+    app.get("/", (req, res) => res.send("DocAppoint Server is running!"));
 
-    // LOGOUT
-    app.post("/logout", (req, res) => {
-      res.clearCookie("token", { httpOnly: true, secure: true, sameSite: "none" });
-      res.send({ success: true });
-    });
-
-    // CURRENT USER
-    app.get("/me", async (req, res) => {
-      try {
-        const token = req.cookies.token;
-        if (!token) return res.send(null);
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await usersCollection.findOne({ email: decoded.email });
-        res.send(user ? { name: user.name, email: user.email, image: user.image } : null);
-      } catch (error) { res.send(null); }
-    });
-
-    // DOCTORS (Public)
     app.get("/doctors", async (req, res) => {
-      const result = await doctorsCollection.find().toArray();
+      const result = await db.collection("doctors").find().toArray();
       res.send(result);
     });
 
     app.get("/doctors/:id", async (req, res) => {
-      const result = await doctorsCollection.findOne({ _id: new ObjectId(req.params.id) });
-      res.send(result);
+      try {
+        const result = await db.collection("doctors").findOne({ _id: new ObjectId(req.params.id) });
+        result ? res.send(result) : res.status(404).send({ message: "Doctor not found" });
+      } catch (e) { res.status(400).send({ message: "Invalid ID" }); }
     });
 
-    // BOOKINGS (Protected)
-    app.post("/bookings", verifyToken, async (req, res) => {
-      const result = await bookingsCollection.insertOne(req.body);
+    // Protected Routes
+    app.post("/bookings", authMiddleware, async (req, res) => {
+      const booking = { ...req.body, userEmail: req.user.email, createdAt: new Date() };
+      const result = await db.collection("bookings").insertOne(booking);
       res.status(201).send({ success: true, insertedId: result.insertedId });
     });
 
-    app.get("/bookings", verifyToken, async (req, res) => {
-      const email = req.query.email;
-      if (req.decoded.email !== email) return res.status(403).send({ message: "Forbidden access" });
-      const query = { $or: [{ userEmail: email }, { email: email }] };
-      const result = await bookingsCollection.find(query).toArray();
+    app.get("/bookings", authMiddleware, async (req, res) => {
+      const result = await db.collection("bookings").find({ userEmail: req.user.email }).toArray();
       res.send(result);
     });
 
-    app.patch("/bookings/:id", verifyToken, async (req, res) => {
-      const result = await bookingsCollection.updateOne({ _id: new ObjectId(req.params.id) }, { $set: { status: req.body.status } });
-      res.send(result);
+    app.patch("/bookings/:id", authMiddleware, async (req, res) => {
+      try {
+        const result = await db.collection("bookings").updateOne(
+          { _id: new ObjectId(req.params.id), userEmail: req.user.email },
+          { $set: { status: req.body.status, updatedAt: new Date() } }
+        );
+        result.matchedCount > 0 ? res.send({ success: true }) : res.status(404).send({ message: "Not found" });
+      } catch (e) { res.status(400).send({ message: "Invalid ID" }); }
     });
 
-    app.put("/bookings/:id", verifyToken, async (req, res) => {
-      const data = req.body;
-      const result = await bookingsCollection.updateOne({ _id: new ObjectId(req.params.id) }, {
-        $set: { patientName: data.patientName, phone: data.phone, appointmentDate: data.appointmentDate, appointmentTime: data.appointmentTime || data.timeSlot, timeSlot: data.timeSlot || data.appointmentTime }
-      });
-      res.send(result);
-    });
-
-    app.delete("/bookings/:id", verifyToken, async (req, res) => {
-      const result = await bookingsCollection.deleteOne({ _id: new ObjectId(req.params.id) });
-      res.send(result);
+    app.delete("/bookings/:id", authMiddleware, async (req, res) => {
+      try {
+        const result = await db.collection("bookings").deleteOne({ 
+          _id: new ObjectId(req.params.id), 
+          userEmail: req.user.email 
+        });
+        result.deletedCount > 0 ? res.send({ success: true }) : res.status(404).send({ message: "Not found" });
+      } catch (e) { res.status(400).send({ message: "Invalid ID" }); }
     });
 
   } catch (error) {

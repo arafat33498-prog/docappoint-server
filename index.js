@@ -35,24 +35,25 @@ async function run() {
     const doctorsCollection = db.collection("doctors");
     const bookingsCollection = db.collection("bookings");
 
-    // শুধু অথেন্টিকেশনের জন্য এই অংশটি আপনার আগের কোডে যুক্ত করুন
     const auth = betterAuth({
-      baseURL: process.env.BETTER_AUTH_URL,
       database: mongodbAdapter(db),
-      emailAndPassword: { enabled: true },
+      emailAndPassword: {
+        enabled: true,
+      },
       trustedOrigins: [process.env.CLIENT_URL],
       advanced: {
         trustHost: true,
-        cookieOptions: { secure: true, sameSite: "none" }
+        cookieOptions: {
+          secure: true,
+          sameSite: "none",
+        }
       },
     });
 
-    // এই রুটটি আপনার আগের কোডে ছিল না, এটি শুধু অথেন্টিকেশন হ্যান্ডেল করবে
-    app.all("/api/auth/*", (req, res) => {
+    app.all(/^\/api\/auth\/.*/, (req, res) => {
       toNodeHandler(auth)(req, res);
     });
 
-    // আপনার আগের সব রুট যেমন ছিল ঠিক তেমনই রাখা হয়েছে (কোনো পরিবর্তন নেই)
     app.get("/", (req, res) => {
       res.send("DocAppoint Server Running 🚀");
     });
